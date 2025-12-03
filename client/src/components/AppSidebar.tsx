@@ -43,6 +43,7 @@ export function AppSidebar({ userRole, userName, onLogout }: AppSidebarProps) {
     { title: "Stock", url: "/stock", icon: Package },
     { title: "Customers", url: "/customers", icon: Users },
     { title: "Orders", url: "/orders", icon: ShoppingCart },
+    { title: "Deliveries", url: "/deliveries", icon: Calendar },
     { title: "Vans", url: "/vans", icon: Truck },
     { title: "Analytics", url: "/analytics", icon: BarChart3 },
     { title: "Settings", url: "/settings", icon: Settings },

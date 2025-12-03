@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -7,13 +6,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppSidebar } from "@/components/AppSidebar";
+import { useAuth } from "@/hooks/useAuth";
+import { Loader2 } from "lucide-react";
 import {
   SidebarProvider,
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
 
-import Login from "@/pages/Login";
+import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Suppliers from "@/pages/Suppliers";
 import Planting from "@/pages/Planting";
@@ -55,15 +56,18 @@ function StaffRouter() {
   );
 }
 
-function AuthenticatedApp({
-  userRole,
-  userName,
-  onLogout,
-}: {
-  userRole: "owner" | "staff";
-  userName: string;
-  onLogout: () => void;
-}) {
+function AuthenticatedApp() {
+  const { user } = useAuth();
+  
+  const userRole = (user?.role === "staff" ? "staff" : "owner") as "owner" | "staff";
+  const userName = user?.firstName && user?.lastName 
+    ? `${user.firstName} ${user.lastName}` 
+    : user?.email || "User";
+
+  const handleLogout = () => {
+    window.location.href = "/api/logout";
+  };
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -72,7 +76,7 @@ function AuthenticatedApp({
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
-        <AppSidebar userRole={userRole} userName={userName} onLogout={onLogout} />
+        <AppSidebar userRole={userRole} userName={userName} onLogout={handleLogout} />
         <SidebarInset className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
             <div className="flex items-center gap-4">
@@ -89,35 +93,42 @@ function AuthenticatedApp({
   );
 }
 
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading SproutDrive...</p>
+      </div>
+    </div>
+  );
+}
+
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <Switch>
+      {!isAuthenticated ? (
+        <Route path="/" component={Landing} />
+      ) : (
+        <AuthenticatedApp />
+      )}
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
 function App() {
-  // todo: remove mock functionality - replace with real auth state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState<"owner" | "staff">("owner");
-  const [userName, setUserName] = useState("John Owner");
-
-  const handleLogin = (role: "owner" | "staff") => {
-    setIsAuthenticated(true);
-    setUserRole(role);
-    setUserName(role === "owner" ? "John Owner" : "Mike Staff");
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-  };
-
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="sproutdrive-theme">
         <TooltipProvider>
-          {isAuthenticated ? (
-            <AuthenticatedApp
-              userRole={userRole}
-              userName={userName}
-              onLogout={handleLogout}
-            />
-          ) : (
-            <Login onLogin={handleLogin} />
-          )}
+          <AppContent />
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

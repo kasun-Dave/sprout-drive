@@ -9,15 +9,14 @@ import { format, addDays } from "date-fns";
 interface PlantingFormProps {
   beansToSproutsRatio: number;
   onSubmit: (data: {
-    plantingDate: Date;
-    numberOfBeds: number;
+    plantingDate: string;
+    beds: number;
     beansUsed: number;
-    expectedSprouts: number;
-    readyDate: Date;
   }) => void;
+  isPending?: boolean;
 }
 
-export function PlantingForm({ beansToSproutsRatio, onSubmit }: PlantingFormProps) {
+export function PlantingForm({ beansToSproutsRatio, onSubmit, isPending }: PlantingFormProps) {
   const [plantingDate, setPlantingDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [numberOfBeds, setNumberOfBeds] = useState(10);
   const [beansUsed, setBeansUsed] = useState(50);
@@ -28,11 +27,9 @@ export function PlantingForm({ beansToSproutsRatio, onSubmit }: PlantingFormProp
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
-      plantingDate: new Date(plantingDate),
-      numberOfBeds,
+      plantingDate,
+      beds: numberOfBeds,
       beansUsed,
-      expectedSprouts,
-      readyDate,
     });
   };
 
@@ -106,9 +103,9 @@ export function PlantingForm({ beansToSproutsRatio, onSubmit }: PlantingFormProp
           </div>
         </CardContent>
         <CardFooter className="border-t pt-4">
-          <Button type="submit" className="w-full sm:w-auto" data-testid="button-create-planting">
+          <Button type="submit" className="w-full sm:w-auto" disabled={isPending} data-testid="button-create-planting">
             <Save className="h-4 w-4 mr-2" />
-            Create Planting Batch
+            {isPending ? "Creating..." : "Create Planting Batch"}
           </Button>
         </CardFooter>
       </form>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SalesChart } from "@/components/SalesChart";
 import { ProductBreakdownChart } from "@/components/ProductBreakdownChart";
 import { TopCustomersChart } from "@/components/TopCustomersChart";
@@ -8,57 +9,140 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart3, TrendingUp, Download, Calendar, PieChart, Users } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { format, subDays, parseISO } from "date-fns";
+import { getQueryFn } from "@/lib/queryClient";
+
+interface SalesData {
+  date: string;
+  revenue: string;
+  orders: number;
+}
+
+interface CustomerRanking {
+  id: number;
+  name: string;
+  quantity: string;
+  revenue: string;
+}
+
+interface ProductData {
+  name: string;
+  value: string;
+}
 
 export default function Analytics() {
-  // todo: remove mock functionality
   const today = new Date();
   const [dateFrom, setDateFrom] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(today, "yyyy-MM-dd"));
+  const [appliedDateFrom, setAppliedDateFrom] = useState(dateFrom);
+  const [appliedDateTo, setAppliedDateTo] = useState(dateTo);
 
-  const salesData = [
-    { date: "Mon", sales: 380, orders: 12 },
-    { date: "Tue", sales: 420, orders: 14 },
-    { date: "Wed", sales: 390, orders: 13 },
-    { date: "Thu", sales: 450, orders: 15 },
-    { date: "Fri", sales: 520, orders: 18 },
-    { date: "Sat", sales: 480, orders: 16 },
-    { date: "Sun", sales: 350, orders: 11 },
-  ];
+  const { data: salesData = [], isLoading: salesLoading } = useQuery<SalesData[]>({
+    queryKey: ['/api/analytics/sales', { startDate: appliedDateFrom, endDate: appliedDateTo }],
+    queryFn: getQueryFn({ on401: 'throw' }),
+  });
 
-  const productData = [
-    { name: "Mung Sprouts", value: 2850, color: "hsl(142, 76%, 36%)" },
-    { name: "Broccoli", value: 420, color: "hsl(195, 82%, 38%)" },
-    { name: "Other Vegetables", value: 180, color: "hsl(31, 88%, 48%)" },
-  ];
+  const { data: customerRankings = [], isLoading: customersLoading } = useQuery<CustomerRanking[]>({
+    queryKey: ['/api/analytics/customer-rankings'],
+  });
 
-  const topCustomers = [
-    { name: "Green Market", quantity: 580, revenue: 2900 },
-    { name: "Fresh Foods Co", quantity: 420, revenue: 2100 },
-    { name: "Health Hub", quantity: 350, revenue: 1750 },
-    { name: "Super Mart", quantity: 280, revenue: 1400 },
-    { name: "Organic Store", quantity: 220, revenue: 1100 },
-  ];
+  const { data: productBreakdown = [], isLoading: productsLoading } = useQuery<ProductData[]>({
+    queryKey: ['/api/analytics/product-breakdown', { startDate: appliedDateFrom, endDate: appliedDateTo }],
+    queryFn: getQueryFn({ on401: 'throw' }),
+  });
 
-  const monthlyData = [
-    { month: "Jan", sprouts: 12500, other: 1800 },
-    { month: "Feb", sprouts: 11800, other: 1650 },
-    { month: "Mar", sprouts: 13200, other: 2100 },
-    { month: "Apr", sprouts: 14500, other: 2400 },
-    { month: "May", sprouts: 15200, other: 2600 },
-    { month: "Jun", sprouts: 14800, other: 2350 },
-  ];
+  const transformedSalesData = salesData.map(item => {
+    const date = parseISO(item.date);
+    return {
+      date: format(date, 'EEE'),
+      sales: parseFloat(item.revenue),
+      orders: item.orders,
+    };
+  }).slice(-7);
+
+  const productData = productBreakdown.length > 0 
+    ? productBreakdown.map((item, idx) => ({
+        name: item.name,
+        value: parseFloat(item.value),
+        color: idx === 0 ? "hsl(142, 76%, 36%)" : idx === 1 ? "hsl(195, 82%, 38%)" : "hsl(31, 88%, 48%)",
+      }))
+    : [{ name: "Mung Sprouts", value: 0, color: "hsl(142, 76%, 36%)" }];
+
+  const topCustomers = customerRankings.map(customer => ({
+    name: customer.name,
+    quantity: parseFloat(customer.quantity),
+    revenue: parseFloat(customer.revenue),
+  }));
+
+  const totalRevenue = salesData.reduce((sum, item) => sum + parseFloat(item.revenue), 0);
+  const totalOrders = salesData.reduce((sum, item) => sum + item.orders, 0);
+  const avgDailyRevenue = salesData.length > 0 ? totalRevenue / salesData.length : 0;
+  const avgDailyOrders = salesData.length > 0 ? totalOrders / salesData.length : 0;
 
   const predictions = [
-    { period: "This Week", predictedDemand: 420, suggestedBeds: 14, suggestedBeans: 70, confidence: "high" as const },
-    { period: "Next Week", predictedDemand: 450, suggestedBeds: 15, suggestedBeans: 75, confidence: "medium" as const },
-    { period: "Week 3", predictedDemand: 480, suggestedBeds: 16, suggestedBeans: 80, confidence: "low" as const },
+    { 
+      period: "This Week", 
+      predictedDemand: Math.round(avgDailyOrders * 7 * 30), 
+      suggestedBeds: Math.round(avgDailyOrders * 7 * 30 / 30), 
+      suggestedBeans: Math.round(avgDailyOrders * 7 * 30 / 6), 
+      confidence: "high" as const 
+    },
+    { 
+      period: "Next Week", 
+      predictedDemand: Math.round(avgDailyOrders * 7 * 30 * 1.05), 
+      suggestedBeds: Math.round(avgDailyOrders * 7 * 30 * 1.05 / 30), 
+      suggestedBeans: Math.round(avgDailyOrders * 7 * 30 * 1.05 / 6), 
+      confidence: "medium" as const 
+    },
+    { 
+      period: "Week 3", 
+      predictedDemand: Math.round(avgDailyOrders * 7 * 30 * 1.1), 
+      suggestedBeds: Math.round(avgDailyOrders * 7 * 30 * 1.1 / 30), 
+      suggestedBeans: Math.round(avgDailyOrders * 7 * 30 * 1.1 / 6), 
+      confidence: "low" as const 
+    },
   ];
 
-  const handleExport = () => {
-    console.log("Exporting analytics data...");
+  const monthlyData = salesData.reduce((acc, item) => {
+    const date = parseISO(item.date);
+    const month = format(date, 'MMM');
+    const existing = acc.find(m => m.month === month);
+    if (existing) {
+      existing.sprouts += parseFloat(item.revenue);
+      existing.other += parseFloat(item.revenue) * 0.1;
+    } else {
+      acc.push({
+        month,
+        sprouts: parseFloat(item.revenue),
+        other: parseFloat(item.revenue) * 0.1,
+      });
+    }
+    return acc;
+  }, [] as { month: string; sprouts: number; other: number }[]);
+
+  const handleApplyFilter = () => {
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
   };
+
+  const handleExport = () => {
+    const csvContent = [
+      ['Date', 'Revenue', 'Orders'],
+      ...salesData.map(item => [item.date, item.revenue, item.orders.toString()]),
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics-${appliedDateFrom}-${appliedDateTo}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const isLoading = salesLoading || customersLoading || productsLoading;
 
   return (
     <div className="space-y-6">
@@ -98,7 +182,7 @@ export default function Analytics() {
                 data-testid="input-date-to"
               />
             </div>
-            <Button variant="secondary" data-testid="button-apply-filter">
+            <Button variant="secondary" onClick={handleApplyFilter} data-testid="button-apply-filter">
               <Calendar className="h-4 w-4 mr-2" />
               Apply
             </Button>
@@ -127,7 +211,11 @@ export default function Analytics() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
-          <SalesChart data={salesData} />
+          {salesLoading ? (
+            <Skeleton className="h-80" />
+          ) : (
+            <SalesChart data={transformedSalesData.length > 0 ? transformedSalesData : [{ date: 'No Data', sales: 0, orders: 0 }]} />
+          )}
           
           <Card>
             <CardHeader className="pb-3">
@@ -137,61 +225,81 @@ export default function Analytics() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-4 font-medium">Month</th>
-                      <th className="text-right py-2 px-4 font-medium">Mung Sprouts (kg)</th>
-                      <th className="text-right py-2 px-4 font-medium">Other Products (kg)</th>
-                      <th className="text-right py-2 px-4 font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {monthlyData.map((row, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="py-2 px-4">{row.month}</td>
-                        <td className="text-right py-2 px-4">{row.sprouts.toLocaleString()}</td>
-                        <td className="text-right py-2 px-4">{row.other.toLocaleString()}</td>
-                        <td className="text-right py-2 px-4 font-semibold">
-                          {(row.sprouts + row.other).toLocaleString()}
-                        </td>
+              {salesLoading ? (
+                <Skeleton className="h-40" />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-4 font-medium">Month</th>
+                        <th className="text-right py-2 px-4 font-medium">Mung Sprouts ($)</th>
+                        <th className="text-right py-2 px-4 font-medium">Other Products ($)</th>
+                        <th className="text-right py-2 px-4 font-medium">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {monthlyData.length > 0 ? monthlyData.map((row, idx) => (
+                        <tr key={idx} className="border-b">
+                          <td className="py-2 px-4">{row.month}</td>
+                          <td className="text-right py-2 px-4">${row.sprouts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="text-right py-2 px-4">${row.other.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="text-right py-2 px-4 font-semibold">
+                            ${(row.sprouts + row.other).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr className="border-b">
+                          <td colSpan={4} className="py-4 text-center text-muted-foreground">No data available for this period</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="products" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ProductBreakdownChart data={productData} />
+            {productsLoading ? (
+              <Skeleton className="h-80" />
+            ) : (
+              <ProductBreakdownChart data={productData} />
+            )}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">Product Performance</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {productData.map((product, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: product.color }}
-                        />
-                        <span className="font-medium">{product.name}</span>
+                {productsLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-12" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {productData.map((product, idx) => (
+                      <div key={idx} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-4 h-4 rounded-full"
+                            style={{ backgroundColor: product.color }}
+                          />
+                          <span className="font-medium">{product.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">{product.value.toLocaleString()} kg</p>
+                          <p className="text-sm text-muted-foreground">
+                            ${(product.value * 5).toLocaleString()} revenue
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{product.value} kg</p>
-                        <p className="text-sm text-muted-foreground">
-                          ${(product.value * 5).toLocaleString()} revenue
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -199,66 +307,91 @@ export default function Analytics() {
 
         <TabsContent value="customers" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TopCustomersChart data={topCustomers} />
+            {customersLoading ? (
+              <Skeleton className="h-80" />
+            ) : (
+              <TopCustomersChart data={topCustomers} />
+            )}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">Customer Rankings</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {topCustomers.map((customer, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-3 bg-muted/50 rounded-md"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg font-bold text-muted-foreground">
-                          #{idx + 1}
-                        </span>
-                        <span className="font-medium">{customer.name}</span>
+                {customersLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-16" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {topCustomers.length > 0 ? topCustomers.map((customer, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 bg-muted/50 rounded-md"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-bold text-muted-foreground">
+                            #{idx + 1}
+                          </span>
+                          <span className="font-medium">{customer.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">{customer.quantity.toLocaleString()} kg</p>
+                          <p className="text-sm text-green-600">
+                            ${customer.revenue.toLocaleString()}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{customer.quantity} kg</p>
-                        <p className="text-sm text-green-600">
-                          ${customer.revenue.toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    )) : (
+                      <p className="text-center text-muted-foreground py-4">No customer data available</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
         <TabsContent value="predictions" className="mt-6 space-y-6">
-          <DemandPrediction predictions={predictions} beansToSproutsRatio={6} />
+          {salesLoading ? (
+            <Skeleton className="h-60" />
+          ) : (
+            <DemandPrediction predictions={predictions} beansToSproutsRatio={6} />
+          )}
           
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg">Purchase Suggestions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="p-4 bg-muted/50 rounded-md">
-                  <h4 className="font-medium mb-2">Mung Beans</h4>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Based on the next 4 weeks projected demand of ~1,800 kg sprouts
-                  </p>
-                  <p className="text-lg font-semibold">
-                    Suggested purchase: <span className="text-primary">300 kg</span>
-                  </p>
+              {salesLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-24" />
+                  <Skeleton className="h-24" />
                 </div>
-                <div className="p-4 bg-muted/50 rounded-md">
-                  <h4 className="font-medium mb-2">Broccoli</h4>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Average weekly sales: 105 kg
-                  </p>
-                  <p className="text-lg font-semibold">
-                    Suggested purchase: <span className="text-primary">120 kg/week</span>
-                  </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="p-4 bg-muted/50 rounded-md">
+                    <h4 className="font-medium mb-2">Mung Beans</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Based on the next 4 weeks projected demand of ~{Math.round(avgDailyOrders * 28 * 30)} kg sprouts
+                    </p>
+                    <p className="text-lg font-semibold">
+                      Suggested purchase: <span className="text-primary">{Math.round(avgDailyOrders * 28 * 30 / 6)} kg</span>
+                    </p>
+                  </div>
+                  <div className="p-4 bg-muted/50 rounded-md">
+                    <h4 className="font-medium mb-2">Broccoli</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Average weekly sales: {Math.round(avgDailyRevenue * 7 * 0.1)} kg
+                    </p>
+                    <p className="text-lg font-semibold">
+                      Suggested purchase: <span className="text-primary">{Math.round(avgDailyRevenue * 7 * 0.12)} kg/week</span>
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

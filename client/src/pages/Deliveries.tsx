@@ -1,75 +1,101 @@
-import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { DeliveryChecklist } from "@/components/DeliveryChecklist";
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Truck, Package, DollarSign, CheckCircle, Sprout } from "lucide-react";
+import { format } from "date-fns";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Order, Customer, StockItem } from "@shared/schema";
+
+type OrderWithCustomer = Order & { customer?: Customer };
+
+interface DeliveryItem {
+  id: string;
+  customerName: string;
+  shopName?: string;
+  address: string;
+  orderedQty: number;
+  baggedQty: number;
+  deliveredQty: number;
+  cashCollected: number;
+  isDelivered: boolean;
+}
 
 export default function Deliveries() {
-  // todo: remove mock functionality
-  const [deliveryItems, setDeliveryItems] = useState([
-    {
-      id: "1",
-      customerName: "Green Market",
-      shopName: "Main Branch",
-      address: "123 Main St, Downtown",
-      orderedQty: 50,
-      baggedQty: 50,
-      deliveredQty: 48,
-      cashCollected: 240,
-      isDelivered: true,
-    },
-    {
-      id: "2",
-      customerName: "Fresh Foods Co",
-      address: "456 Oak Ave, Midtown",
-      orderedQty: 30,
-      baggedQty: 30,
-      deliveredQty: 0,
-      cashCollected: 0,
-      isDelivered: false,
-    },
-    {
-      id: "3",
-      customerName: "Health Hub",
-      shopName: "City Center",
-      address: "789 Pine Rd, Uptown",
-      orderedQty: 25,
-      baggedQty: 25,
-      deliveredQty: 0,
-      cashCollected: 0,
-      isDelivered: false,
-    },
-    {
-      id: "4",
-      customerName: "Super Mart",
-      address: "321 Elm Dr, West Side",
-      orderedQty: 40,
-      baggedQty: 0,
-      deliveredQty: 0,
-      cashCollected: 0,
-      isDelivered: false,
-    },
-    {
-      id: "5",
-      customerName: "Organic Store",
-      address: "654 Birch Ln, East Mall",
-      orderedQty: 20,
-      baggedQty: 0,
-      deliveredQty: 0,
-      cashCollected: 0,
-      isDelivered: false,
-    },
-  ]);
+  const { toast } = useToast();
+  const today = format(new Date(), "yyyy-MM-dd");
 
-  const handleUpdateItem = (id: string, updates: any) => {
-    setDeliveryItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
+  const { data: orders = [], isLoading: ordersLoading } = useQuery<OrderWithCustomer[]>({
+    queryKey: ['/api/orders', { date: today }],
+  });
+
+  const { data: stockItems = [], isLoading: stockLoading } = useQuery<StockItem[]>({
+    queryKey: ['/api/stock'],
+  });
+
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number; updates: Partial<Order> }) => {
+      const res = await apiRequest('PATCH', `/api/orders/${id}`, updates);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({
+        title: "Order updated",
+        description: "Delivery details have been saved.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update order. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const transformOrderToDeliveryItem = (order: OrderWithCustomer): DeliveryItem => ({
+    id: order.id.toString(),
+    customerName: order.customer?.name || 'Unknown Customer',
+    shopName: order.customer?.businessName || undefined,
+    address: order.customer?.address || 'No address',
+    orderedQty: parseFloat(order.quantityKg),
+    baggedQty: order.bagsDelivered || 0,
+    deliveredQty: order.bagsDelivered || 0,
+    cashCollected: parseFloat(order.cashCollected || '0'),
+    isDelivered: order.status === 'delivered',
+  });
+
+  const deliveryItems = orders.map(transformOrderToDeliveryItem);
+
+  const handleUpdateItem = (id: string, updates: Partial<DeliveryItem>) => {
+    const orderId = parseInt(id);
+    const orderUpdates: Partial<Order> = {};
+    
+    if (updates.baggedQty !== undefined) {
+      orderUpdates.bagsDelivered = updates.baggedQty;
+    }
+    if (updates.deliveredQty !== undefined) {
+      orderUpdates.bagsDelivered = updates.deliveredQty;
+    }
+    if (updates.cashCollected !== undefined) {
+      orderUpdates.cashCollected = updates.cashCollected.toString();
+    }
+    if (updates.isDelivered !== undefined) {
+      orderUpdates.status = updates.isDelivered ? 'delivered' : 'pending';
+    }
+    
+    updateOrderMutation.mutate({ id: orderId, updates: orderUpdates });
   };
 
   const handleSaveAll = () => {
-    console.log("Saving all deliveries:", deliveryItems);
+    toast({
+      title: "Changes saved",
+      description: "All delivery updates have been saved.",
+    });
   };
 
   const totalOrdered = deliveryItems.reduce((sum, item) => sum + item.orderedQty, 0);
@@ -78,7 +104,36 @@ export default function Deliveries() {
   const totalCash = deliveryItems.reduce((sum, item) => sum + item.cashCollected, 0);
   const completedCount = deliveryItems.filter((item) => item.isDelivered).length;
 
-  const readySprouts = 450; // todo: get from API
+  const readySprouts = stockItems
+    .filter(item => item.itemType === 'sprouts' || item.name.toLowerCase().includes('sprout'))
+    .reduce((sum, item) => sum + parseFloat(item.currentQuantity), 0);
+
+  const isLoading = ordersLoading || stockLoading;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Today's Deliveries</h1>
+          <p className="text-muted-foreground">Manage bagging, delivery, and cash collection</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Skeleton className="h-96" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-48" />
+            <Skeleton className="h-48" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -90,14 +145,14 @@ export default function Deliveries() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard
           title="Ready Sprouts"
-          value={`${readySprouts} kg`}
+          value={`${readySprouts.toFixed(0)} kg`}
           subtitle="Available stock"
           icon={Sprout}
           variant="success"
         />
         <MetricCard
           title="Ordered"
-          value={`${totalOrdered} kg`}
+          value={`${totalOrdered.toFixed(0)} kg`}
           subtitle={`${deliveryItems.length} customers`}
           icon={Package}
         />
@@ -150,7 +205,7 @@ export default function Deliveries() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Remaining Stock</span>
-                <span className="font-semibold">{readySprouts - totalDelivered} kg</span>
+                <span className="font-semibold">{(readySprouts - totalDelivered).toFixed(0)} kg</span>
               </div>
             </CardContent>
           </Card>

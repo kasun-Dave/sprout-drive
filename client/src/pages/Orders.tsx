@@ -1,44 +1,116 @@
 import { useState } from "react";
-import { OrdersTable, Order } from "@/components/OrdersTable";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { OrdersTable } from "@/components/OrdersTable";
 import { QuickOrderEntry } from "@/components/QuickOrderEntry";
 import { InvoiceView } from "@/components/InvoiceView";
 import { MetricCard } from "@/components/MetricCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ShoppingCart, Plus, FileText, Package, DollarSign, Clock } from "lucide-react";
+import { ShoppingCart, Plus, Package, DollarSign, Clock } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Order as DbOrder, Customer, InsertOrder } from "@shared/schema";
+
+type OrderWithCustomer = DbOrder & { customer?: Customer };
+
+interface TableOrder {
+  id: string;
+  customerName: string;
+  shopName?: string;
+  product: string;
+  orderedQty: number;
+  baggedQty: number;
+  deliveredQty: number;
+  status: "pending" | "bagged" | "delivered" | "cancelled";
+  cashCollected?: number;
+  paymentType?: "cash" | "credit";
+}
 
 export default function Orders() {
-  // todo: remove mock functionality
-  const [orders, setOrders] = useState<Order[]>([
-    { id: "1", customerName: "Green Market", shopName: "Main Branch", product: "Mung Sprouts", orderedQty: 50, baggedQty: 50, deliveredQty: 48, status: "delivered", cashCollected: 240, paymentType: "cash" },
-    { id: "2", customerName: "Fresh Foods Co", product: "Mung Sprouts", orderedQty: 30, baggedQty: 30, deliveredQty: 0, status: "bagged" },
-    { id: "3", customerName: "Health Hub", shopName: "City Center", product: "Mung Sprouts", orderedQty: 25, baggedQty: 0, deliveredQty: 0, status: "pending" },
-    { id: "4", customerName: "Super Mart", product: "Broccoli", orderedQty: 15, baggedQty: 15, deliveredQty: 15, status: "delivered", cashCollected: 75, paymentType: "credit" },
-    { id: "5", customerName: "Organic Store", product: "Mung Sprouts", orderedQty: 20, baggedQty: 0, deliveredQty: 0, status: "pending" },
-  ]);
-
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
-  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<TableOrder | null>(null);
 
-  const customers = [
-    { id: "1", name: "Green Market", shopName: "Main Branch", usualQty: 50 },
-    { id: "2", name: "Fresh Foods Co", usualQty: 30 },
-    { id: "3", name: "Health Hub", shopName: "City Center", usualQty: 25 },
-    { id: "4", name: "Super Mart", usualQty: 40 },
-    { id: "5", name: "Organic Store", usualQty: 20 },
-  ];
+  const { data: ordersData = [], isLoading: ordersLoading } = useQuery<OrderWithCustomer[]>({
+    queryKey: ["/api/orders", selectedDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders?date=${selectedDate}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch orders");
+      return res.json();
+    },
+  });
 
-  const products = ["Mung Sprouts", "Broccoli", "Other Vegetables"];
+  const { data: customers = [], isLoading: customersLoading } = useQuery<Customer[]>({
+    queryKey: ["/api/customers"],
+  });
 
-  const handleUpdateOrder = (id: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, ...updates } : o))
-    );
+  const createOrderMutation = useMutation({
+    mutationFn: async (data: InsertOrder) => {
+      const res = await apiRequest("POST", "/api/orders", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      toast({ title: "Success", description: "Order created successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<InsertOrder> }) => {
+      const res = await apiRequest("PATCH", `/api/orders/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      toast({ title: "Success", description: "Order updated successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const orders: TableOrder[] = ordersData.map((order) => ({
+    id: String(order.id),
+    customerName: order.customer?.name || "Unknown",
+    shopName: order.customer?.businessName || undefined,
+    product: "Mung Sprouts",
+    orderedQty: Number(order.quantityKg),
+    baggedQty: order.bagsDelivered || 0,
+    deliveredQty: order.bagsDelivered || 0,
+    status: order.status as "pending" | "bagged" | "delivered" | "cancelled",
+    cashCollected: order.cashCollected ? Number(order.cashCollected) : undefined,
+    paymentType: order.paymentStatus === "paid" ? "cash" : undefined,
+  }));
+
+  const handleUpdateOrder = (id: string, updates: Partial<TableOrder>) => {
+    const orderId = parseInt(id);
+    const dbUpdates: Partial<InsertOrder> = {};
+    
+    if (updates.status) {
+      dbUpdates.status = updates.status;
+    }
+    if (updates.baggedQty !== undefined) {
+      dbUpdates.bagsDelivered = updates.baggedQty;
+    }
+    if (updates.deliveredQty !== undefined) {
+      dbUpdates.bagsDelivered = updates.deliveredQty;
+    }
+    if (updates.cashCollected !== undefined) {
+      dbUpdates.cashCollected = String(updates.cashCollected);
+      dbUpdates.paymentStatus = "paid";
+    }
+    
+    updateOrderMutation.mutate({ id: orderId, data: dbUpdates });
   };
 
   const handlePrintInvoice = (id: string) => {
@@ -49,23 +121,59 @@ export default function Orders() {
     }
   };
 
-  const handleCreateOrders = (newOrders: any[]) => {
-    const createdOrders = newOrders.map((o, idx) => ({
-      id: String(orders.length + idx + 1),
-      customerName: o.customerName,
-      product: o.product,
-      orderedQty: o.quantity,
-      baggedQty: 0,
-      deliveredQty: 0,
-      status: "pending" as const,
-    }));
-    setOrders([...orders, ...createdOrders]);
+  const handleCreateOrders = (newOrders: Array<{ customerName: string; product: string; quantity: number }>) => {
+    newOrders.forEach((o) => {
+      const customer = customers.find((c) => c.name === o.customerName);
+      if (!customer) {
+        toast({ title: "Error", description: `Customer ${o.customerName} not found`, variant: "destructive" });
+        return;
+      }
+      
+      const orderData: InsertOrder = {
+        customerId: customer.id,
+        orderDate: selectedDate,
+        deliveryDate: selectedDate,
+        quantityKg: String(o.quantity),
+        pricePerKg: customer.pricePerKg || "5.00",
+        totalAmount: String(o.quantity * Number(customer.pricePerKg || 5)),
+        status: "pending",
+        paymentStatus: "pending",
+      };
+      createOrderMutation.mutate(orderData);
+    });
   };
+
+  const customersList = customers.map((c) => ({
+    id: String(c.id),
+    name: c.name,
+    shopName: c.businessName || undefined,
+    usualQty: Number(c.defaultQuantityKg) || 0,
+  }));
+
+  const products = ["Mung Sprouts", "Broccoli", "Other Vegetables"];
 
   const totalOrdered = orders.reduce((sum, o) => sum + o.orderedQty, 0);
   const totalDelivered = orders.reduce((sum, o) => sum + o.deliveredQty, 0);
   const totalCash = orders.reduce((sum, o) => sum + (o.cashCollected || 0), 0);
   const pendingCount = orders.filter((o) => o.status === "pending").length;
+
+  if (ordersLoading || customersLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Orders Management</h1>
+          <p className="text-muted-foreground">Create and manage daily orders</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -140,7 +248,7 @@ export default function Orders() {
 
         <TabsContent value="create" className="mt-6">
           <QuickOrderEntry
-            customers={customers}
+            customers={customersList}
             products={products}
             onSubmit={handleCreateOrders}
           />

@@ -18,9 +18,10 @@ interface SettingsPanelProps {
     enableNotifications: boolean;
   };
   onSave: (settings: any) => void;
+  isPending?: boolean;
 }
 
-export function SettingsPanel({ initialSettings, onSave }: SettingsPanelProps) {
+export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPanelProps) {
   const [settings, setSettings] = useState(initialSettings);
 
   const handleSave = () => {
@@ -200,9 +201,9 @@ export function SettingsPanel({ initialSettings, onSave }: SettingsPanelProps) {
           </div>
         </CardContent>
         <CardFooter className="border-t pt-4">
-          <Button onClick={handleSave} data-testid="button-save-settings">
+          <Button onClick={handleSave} disabled={isPending} data-testid="button-save-settings">
             <Save className="h-4 w-4 mr-2" />
-            Save Settings
+            {isPending ? "Saving..." : "Save Settings"}
           </Button>
         </CardFooter>
       </Card>
