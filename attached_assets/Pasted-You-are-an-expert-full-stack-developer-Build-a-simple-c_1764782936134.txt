@@ -1,0 +1,178 @@
+You are an expert full-stack developer. Build a simple, cloud-based web application for a medium-scale mung bean sprout company.
+
+Business summary:
+- The company buys mung beans (and some other plant items like broccoli) from suppliers.
+- They plant mung beans on “beds” (planting trays/plates).
+- Mung sprouts are ready on day 6.
+- Delivery people come daily, take ready sprouts, put them in water, then bag them, and deliver to customers.
+- Owner manually calls customers, gets the required quantity, tells the delivery driver, and later manually enters sales into Excel.
+- I want to replace this with one web system.
+
+## Main requirements
+
+### 1. User roles & login
+- Role 1: Owner/Admin
+  - Can see everything: suppliers, planting, stock, customers, orders, vans, reports.
+- Role 2: Staff/Delivery
+  - Can see only what they need: today’s delivery list, quantities to bag, and a simple screen to enter delivered quantities and cash collected.
+- Simple email/password login is enough.
+
+---
+
+### 2. Suppliers & purchasing
+- Manage supplier list:
+  - Supplier name
+  - Phone, address
+  - Type of items supplied (mung beans, broccoli, other vegetables, etc.)
+- Record purchases from suppliers:
+  - Date
+  - Supplier
+  - Item (e.g., mung beans, broccoli, etc.)
+  - Quantity (kg)
+  - Price per kg, total price
+- Show current stock for:
+  - Mung beans (raw)
+  - Other items (direct resale items like broccoli)
+
+---
+
+### 3. Planting & 6-day sprout planning
+For mung beans only, we need a 6-day planting and harvest plan.
+
+- A “bed” (plant plate) is the unit of planting.
+- When the owner plants, they should be able to create a “Planting Batch”:
+  - Date of planting
+  - Number of beds
+  - Beans used (kg)
+  - Expected ready date = planting date + 6 days (auto-calculated)
+- The system should estimate how many kg of sprouts will be available on the ready date based on a simple conversion ratio that I can change (for example: 1 kg beans → 6 kg sprouts). Keep this ratio configurable.
+
+- Provide a “Planning” view for the owner:
+  - For each day (next 7–10 days), show:
+    - How many beds will be ready
+    - Estimated available sprouts (kg)
+  - Allow the owner to decide how many beds to plant today so that in 6 days there is enough stock for the regular customers.
+
+---
+
+### 4. Customers & daily orders
+- Manage customers:
+  - Customer name
+  - Shop name (if different)
+  - Phone
+  - Address
+  - Delivery route / delivery van (optional)
+  - Usual daily quantity (optional, e.g., “usually 5 kg”)
+
+- Daily orders:
+  - Owner can create/edit an “Order” for each customer for a specific date:
+    - Date
+    - Customer
+    - Product (mung sprouts or any other item)
+    - Ordered quantity (kg or units)
+  - There should be a “Today’s Orders” overview screen:
+    - List all customers for a selected date (default: today)
+    - Show ordered quantity for each customer per product.
+
+---
+
+### 5. Bagging, delivery & quantity adjustments
+Delivery staff process:
+
+- For each day (e.g., today):
+  - See “Ready sprouts” based on planting (total available quantity).
+  - See “Today’s Orders” list for mung sprouts (per customer).
+
+- They should have a simple screen:
+  - For each customer and product:
+    - Ordered quantity
+    - “Bagged quantity” (what they actually bag)
+    - “Delivered quantity” (what actually reached customer)
+  - Example:
+    - Bagged: 300 kg
+    - Delivered: 250 kg
+    - Remaining: 50 kg → this should go back into stock/available quantity.
+
+- After delivery:
+  - Mark order as:
+    - Delivered
+    - Cancelled (if needed)
+  - For each order, store:
+    - Cash collected
+    - Payment type (cash / credit / other)
+    - Invoice number
+
+- System must automatically:
+  - Reduce stock by delivered quantity.
+  - Keep track of any leftover sprouts from “bagged – delivered” and mark them as leftover/returned.
+
+---
+
+### 6. Billing & reports
+- Invoice generation:
+  - For each delivered order, generate a simple invoice:
+    - Company name and logo (placeholders)
+    - Customer name
+    - Date
+    - Items (product, quantity, price per unit, total)
+    - Grand total
+  - PDF or printable HTML is enough.
+
+- Reports for owner:
+  - Daily sales report:
+    - Total sales by date
+    - Breakdown by customer and product
+  - Stock summary:
+    - Current mung bean raw stock
+    - Current sprouts ready stock (today and coming days)
+    - Stock of other items.
+  - Planting summary:
+    - Beds planted, beans used, expected harvest.
+  - Customer summary:
+    - How much each customer bought in a date range.
+
+---
+
+### 7. Vans / delivery vehicles management
+- Manage list of delivery vans:
+  - Vehicle number
+  - Model
+  - Insurance expiry date
+  - Revenue licence expiry date
+  - Notes.
+
+- Maintenance log:
+  - Date
+  - Van
+  - Type of service/repair
+  - Cost
+  - Notes.
+
+- Reminders:
+  - Show a warning on the dashboard when:
+    - Insurance expiry or revenue licence expiry is within 30 days.
+    - Upcoming service based on last service date (e.g., every 6 months, keep this interval configurable).
+
+---
+
+### 8. UX & technology
+- Make it a simple, mobile-friendly web app (responsive).
+- Clean, easy UI because users are not very technical.
+- Use a common modern stack (for example: React + Node.js/Express + PostgreSQL/MySQL), or any full-stack framework you are comfortable with.
+- Include basic data validation and error messages.
+- Add seed/sample data so I can see a working example (a few suppliers, customers, vans, planting batches, and orders).
+
+---
+
+### 9. Nice-to-have (if easy)
+- A dashboard homepage for the owner that shows:
+  - Today’s total ready sprouts.
+  - Today’s total ordered quantity vs. stock.
+  - Number of deliveries today.
+  - Upcoming van insurance/licence expiries.
+
+Build this as a complete project with:
+- Backend API
+- Database schema and migrations
+- Frontend UI
+- Instructions on how to run the project locally and online (deploy on Replit).

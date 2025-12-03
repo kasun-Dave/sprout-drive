@@ -1,0 +1,64 @@
+### 10. Analytics, charts & demand predictions
+
+Add an Analytics module for the Owner/Admin with:
+
+#### 10.1 Past orders overview (charts)
+
+Create a visual analytics page with clear charts (use any chart library you like, e.g., Chart.js):
+
+From the orders, show at least:
+
+- Sales over time:
+  - Line chart: total sales per day / per week / per month.
+- Product-wise breakdown:
+  - Bar or pie chart: total quantity sold per product (mung sprouts, broccoli, etc.) in a selected date range.
+- Customer-wise breakdown:
+  - Bar chart: top customers by quantity or value in a selected period.
+- Seasonal patterns:
+  - For each month of the year, show:
+    - Total quantity of mung sprouts sold.
+    - Total quantity of other products.
+  - This should help see high and low demand months.
+
+Filters:
+- Date range filter (from–to).
+- Filter by product.
+- Filter by customer (optional).
+
+#### 10.2 Planting & purchase predictions
+
+Using past order data, add a simple prediction/planning helper:
+
+- For mung sprouts:
+  - For a selected future month or upcoming 4–6 weeks:
+    - Estimate expected demand per day and per week.
+    - Suggest:
+      - Average kg of sprouts needed per day.
+      - Based on the beans→sprouts ratio and beds capacity:
+        - How many kg of beans should be planted per day.
+        - How many beds should be planted per day (approx).
+  - Use a simple forecasting approach:
+    - Start with moving average of the last few weeks/months.
+    - If possible, give more weight to recent data.
+    - It doesn’t need to be perfect machine learning; a simple, understandable logic is fine.
+
+- For other items (like broccoli and direct-supplier items):
+  - For each product, suggest:
+    - Average quantity to purchase per week/month based on past sales in that same season or month.
+  - Example:
+    - “In the last 3 months, this customer/product used around X kg per week.”
+
+Outputs:
+- A “Planning suggestion” section that clearly shows:
+  - For the selected period:
+    - Suggested daily/weekly planting (beds & kg beans).
+    - Suggested weekly/monthly purchase quantity per product from suppliers.
+- Show these suggestions in:
+  - Simple text cards, and
+  - At least one supporting chart (e.g., bar chart comparing historical and suggested future quantities).
+
+#### 10.3 UX
+
+- Keep the Analytics page very simple and readable:
+  - Big titles, clear labels, tooltips on charts.
+- Allow exporting key analytics views (for example, CSV export for summary tables, if easy).
