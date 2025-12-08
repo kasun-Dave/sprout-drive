@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Supplier, Purchase, InsertSupplier, InsertPurchase } from "@shared/schema";
 import { useState } from "react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -203,11 +204,11 @@ export default function Suppliers() {
             onSubmit={(data) => {
               const purchaseData: InsertPurchase = {
                 supplierId: parseInt(data.supplierId),
-                purchaseDate: data.date,
+                purchaseDate: format(data.date, "yyyy-MM-dd"),
                 quantityKg: String(data.quantity),
                 pricePerKg: String(data.pricePerKg),
                 totalCost: String(data.quantity * data.pricePerKg),
-                notes: data.notes || null,
+                notes: null,
               };
               createPurchaseMutation.mutate(purchaseData);
             }}

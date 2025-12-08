@@ -27,7 +27,7 @@ interface TableOrder {
   deliveredQty: number;
   status: "pending" | "bagged" | "delivered" | "cancelled";
   cashCollected?: number;
-  paymentType?: "cash" | "credit";
+  paymentType?: "cash" | "credit" | "other";
 }
 
 export default function Orders() {

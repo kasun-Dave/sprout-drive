@@ -85,20 +85,27 @@ export function DataTable<T extends Record<string, any>>({
               </div>
             )}
             {onAdd && (
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="default" data-testid="button-add-new">
-                    <Plus className="h-4 w-4 mr-2" />
-                    {addButtonLabel}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{addButtonLabel}</DialogTitle>
-                  </DialogHeader>
-                  {formContent}
-                </DialogContent>
-              </Dialog>
+              formContent ? (
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="default" data-testid="button-add-new">
+                      <Plus className="h-4 w-4 mr-2" />
+                      {addButtonLabel}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{addButtonLabel}</DialogTitle>
+                    </DialogHeader>
+                    {formContent}
+                  </DialogContent>
+                </Dialog>
+              ) : (
+                <Button size="default" onClick={onAdd} data-testid="button-add-new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  {addButtonLabel}
+                </Button>
+              )
             )}
           </div>
         </div>
