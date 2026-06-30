@@ -1,20 +1,15 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { StorageInfoCard } from "@/components/StorageInfoCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Setting, InsertSetting } from "@shared/schema";
-
-interface SettingsData {
-  beansToSproutsRatio: number;
-  sproutGrowthDays: number;
-  serviceIntervalMonths: number;
-  expiryWarningDays: number;
-  companyName: string;
-  companyPhone: string;
-  companyAddress: string;
-  enableNotifications: boolean;
-}
+import {
+  parseBusinessConfig,
+  businessConfigToSettingsEntries,
+  type BusinessConfig,
+} from "@shared/businessConfig";
+import type { Setting } from "@shared/schema";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -23,76 +18,35 @@ export default function Settings() {
     queryKey: ["/api/settings"],
   });
 
-  const updateSettingMutation = useMutation({
-    mutationFn: async ({ key, value }: { key: string; value: string }) => {
-      const res = await apiRequest("PUT", `/api/settings/${key}`, { value });
+  const saveSettingMutation = useMutation({
+    mutationFn: async ({ key, value, description }: { key: string; value: string; description: string }) => {
+      const existing = settingsData.find((s) => s.key === key);
+      if (existing) {
+        const res = await apiRequest("PUT", `/api/settings/${key}`, { value, description });
+        return res.json();
+      }
+      const res = await apiRequest("POST", "/api/settings", { key, value, description });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/business-config"] });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  const createSettingMutation = useMutation({
-    mutationFn: async (data: InsertSetting) => {
-      const res = await apiRequest("POST", "/api/settings", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
+  const initialSettings = parseBusinessConfig(settingsData);
 
-  const settingsMap = settingsData.reduce((acc, setting) => {
-    acc[setting.key] = setting.value;
-    return acc;
-  }, {} as Record<string, string>);
-
-  const initialSettings: SettingsData = {
-    beansToSproutsRatio: Number(settingsMap.beansToSproutsRatio) || 6,
-    sproutGrowthDays: Number(settingsMap.sproutGrowthDays) || 6,
-    serviceIntervalMonths: Number(settingsMap.serviceIntervalMonths) || 6,
-    expiryWarningDays: Number(settingsMap.expiryWarningDays) || 30,
-    companyName: settingsMap.companyName || "SproutDrive",
-    companyPhone: settingsMap.companyPhone || "(555) 123-4567",
-    companyAddress: settingsMap.companyAddress || "123 Farm Road, Green Valley, CA 94000",
-    enableNotifications: settingsMap.enableNotifications === "true",
-  };
-
-  const handleSave = async (settings: SettingsData) => {
-    const settingsToSave = [
-      { key: "beansToSproutsRatio", value: String(settings.beansToSproutsRatio) },
-      { key: "sproutGrowthDays", value: String(settings.sproutGrowthDays) },
-      { key: "serviceIntervalMonths", value: String(settings.serviceIntervalMonths) },
-      { key: "expiryWarningDays", value: String(settings.expiryWarningDays) },
-      { key: "companyName", value: settings.companyName },
-      { key: "companyPhone", value: settings.companyPhone },
-      { key: "companyAddress", value: settings.companyAddress },
-      { key: "enableNotifications", value: String(settings.enableNotifications) },
-    ];
-
+  const handleSave = async (settings: BusinessConfig) => {
     try {
-      for (const setting of settingsToSave) {
-        const existing = settingsData.find((s) => s.key === setting.key);
-        if (existing) {
-          await updateSettingMutation.mutateAsync(setting);
-        } else {
-          await createSettingMutation.mutateAsync({
-            key: setting.key,
-            value: setting.value,
-            description: `${setting.key} setting`,
-          });
-        }
+      for (const entry of businessConfigToSettingsEntries(settings)) {
+        await saveSettingMutation.mutateAsync(entry);
       }
       toast({
         title: "Settings Saved",
-        description: "Your settings have been updated successfully.",
+        description: "Conversion, pricing, and company settings updated.",
       });
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -115,13 +69,17 @@ export default function Settings() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Configure system settings and preferences</p>
+        <p className="text-muted-foreground">
+          Configure conversion rates, pricing, currency, and company details
+        </p>
       </div>
 
-      <SettingsPanel 
-        initialSettings={initialSettings} 
+      <StorageInfoCard />
+
+      <SettingsPanel
+        initialSettings={initialSettings}
         onSave={handleSave}
-        isPending={updateSettingMutation.isPending || createSettingMutation.isPending}
+        isPending={saveSettingMutation.isPending}
       />
     </div>
   );

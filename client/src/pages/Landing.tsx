@@ -1,12 +1,60 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LoginForm } from "@/components/LoginForm";
 import { Sprout, TruckIcon, BarChart3, Users, Package, Calendar } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Landing() {
-  const handleLogin = () => {
+  const [authProvider, setAuthProvider] = useState<"local" | "replit" | null>(null);
+  const [loginError, setLoginError] = useState<string>();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/config")
+      .then((res) => res.json())
+      .then((data) => setAuthProvider(data.provider))
+      .catch(() => setAuthProvider("replit"));
+  }, []);
+
+  const handleReplitLogin = () => {
     window.location.href = "/api/login";
   };
+
+  const handleLocalLogin = async (email: string, password: string) => {
+    setIsLoggingIn(true);
+    setLoginError(undefined);
+    try {
+      await apiRequest("POST", "/api/local/login", { email, password });
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      window.location.href = "/";
+    } catch {
+      setLoginError("Sign in failed. Please try again.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  if (authProvider === "local") {
+    return (
+      <LoginForm
+        onLogin={handleLocalLogin}
+        isLoading={isLoggingIn}
+        error={loginError}
+      />
+    );
+  }
+
+  if (authProvider === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  const handleLogin = handleReplitLogin;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/30">

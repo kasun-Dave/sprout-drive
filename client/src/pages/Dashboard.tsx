@@ -4,31 +4,23 @@ import { PlantingCalendar } from "@/components/PlantingCalendar";
 import { StockSummary } from "@/components/StockSummary";
 import { VanAlertCard } from "@/components/VanAlertCard";
 import { OrdersTable } from "@/components/OrdersTable";
+import { DashboardCharts } from "@/components/DashboardCharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sprout, Package, Truck, Users, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { addDays, format, differenceInDays, parseISO } from "date-fns";
-import type { 
-  Order as DbOrder, 
-  Customer, 
-  PlantingBatch, 
-  Van, 
-  StockItem, 
-  Setting,
-  InsertOrder 
+import { useBusinessConfig } from "@/hooks/useBusinessConfig";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { addDays, format, differenceInDays, parseISO, subDays } from "date-fns";
+import type { DashboardStats } from "@shared/businessConfig";
+import type {
+  Order as DbOrder,
+  Customer,
+  PlantingBatch,
+  Van,
+  StockItem,
+  InsertOrder,
 } from "@shared/schema";
-
-interface DashboardStats {
-  readySproutsKg: number;
-  todaysOrdersKg: number;
-  todaysOrdersCount: number;
-  deliveriesInProgress: number;
-  activeCustomers: number;
-  ordersGrowth: number;
-  customersGrowth: number;
-}
 
 type OrderWithCustomer = DbOrder & { customer?: Customer };
 
@@ -53,8 +45,10 @@ interface VanAlert {
 
 export default function Dashboard() {
   const { toast } = useToast();
+  const { config } = useBusinessConfig();
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd");
+  const weekAgo = format(subDays(today, 6), "yyyy-MM-dd");
 
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
@@ -63,9 +57,7 @@ export default function Dashboard() {
   const { data: ordersData = [], isLoading: ordersLoading } = useQuery<OrderWithCustomer[]>({
     queryKey: ["/api/orders", todayStr],
     queryFn: async () => {
-      const res = await fetch(`/api/orders?date=${todayStr}`, {
-        credentials: "include",
-      });
+      const res = await fetch(`/api/orders?date=${todayStr}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch orders");
       return res.json();
     },
@@ -83,8 +75,9 @@ export default function Dashboard() {
     queryKey: ["/api/stock"],
   });
 
-  const { data: settings = [] } = useQuery<Setting[]>({
-    queryKey: ["/api/settings"],
+  const { data: salesWeek = [] } = useQuery<Array<{ date: string; revenue: string; orders: number }>>({
+    queryKey: ["/api/analytics/sales", { startDate: weekAgo, endDate: todayStr }],
+    queryFn: getQueryFn({ on401: "throw" }),
   });
 
   const updateOrderMutation = useMutation({
@@ -102,8 +95,8 @@ export default function Dashboard() {
     },
   });
 
-  const expiryWarningDays = Number(settings.find(s => s.key === "expiryWarningDays")?.value) || 30;
-  const serviceIntervalMonths = Number(settings.find(s => s.key === "serviceIntervalMonths")?.value) || 6;
+  const expiryWarningDays = config.expiryWarningDays;
+  const serviceIntervalMonths = config.serviceIntervalMonths;
 
   const orders: TableOrder[] = ordersData.map((order) => ({
     id: String(order.id),
@@ -113,7 +106,7 @@ export default function Dashboard() {
     orderedQty: Number(order.quantityKg),
     baggedQty: order.bagsDelivered || 0,
     deliveredQty: order.bagsDelivered || 0,
-    status: order.status as "pending" | "bagged" | "delivered" | "cancelled",
+    status: order.status as TableOrder["status"],
     cashCollected: order.cashCollected ? Number(order.cashCollected) : undefined,
     paymentType: order.paymentStatus === "paid" ? "cash" : undefined,
   }));
@@ -121,21 +114,15 @@ export default function Dashboard() {
   const handleUpdateOrder = (id: string, updates: Partial<TableOrder>) => {
     const orderId = parseInt(id);
     const dbUpdates: Partial<InsertOrder> = {};
-    
-    if (updates.status) {
-      dbUpdates.status = updates.status;
-    }
-    if (updates.baggedQty !== undefined) {
-      dbUpdates.bagsDelivered = updates.baggedQty;
-    }
-    if (updates.deliveredQty !== undefined) {
-      dbUpdates.bagsDelivered = updates.deliveredQty;
-    }
+
+    if (updates.status) dbUpdates.status = updates.status;
+    if (updates.baggedQty !== undefined) dbUpdates.bagsDelivered = updates.baggedQty;
+    if (updates.deliveredQty !== undefined) dbUpdates.bagsDelivered = updates.deliveredQty;
     if (updates.cashCollected !== undefined) {
       dbUpdates.cashCollected = String(updates.cashCollected);
       dbUpdates.paymentStatus = "paid";
     }
-    
+
     updateOrderMutation.mutate({ id: orderId, data: dbUpdates });
   };
 
@@ -143,11 +130,13 @@ export default function Dashboard() {
     const date = addDays(today, i);
     const dateStr = format(date, "yyyy-MM-dd");
     const batchesForDay = plantingBatches.filter(
-      (b) => b.expectedHarvestDate === dateStr && (b.status === "growing" || b.status === "ready")
+      (b) => b.expectedHarvestDate === dateStr && (b.status === "growing" || b.status === "ready"),
     );
     const kgAvailable = batchesForDay.reduce((sum, b) => sum + Number(b.expectedYieldKg), 0);
-    const bedsReady = batchesForDay.length;
-    return { date, bedsReady, kgAvailable, orderedKg: 0 };
+    const orderedKg = ordersData
+      .filter((o) => o.deliveryDate === dateStr)
+      .reduce((sum, o) => sum + Number(o.quantityKg), 0);
+    return { date, bedsReady: batchesForDay.length, kgAvailable, orderedKg };
   });
 
   const stockSummaryItems = stockItems.map((item) => ({
@@ -160,7 +149,7 @@ export default function Dashboard() {
 
   const vanAlerts: VanAlert[] = vans.flatMap((van) => {
     const alerts: VanAlert[] = [];
-    
+
     if (van.insuranceExpiry) {
       const expiryDate = parseISO(van.insuranceExpiry);
       const daysUntil = differenceInDays(expiryDate, today);
@@ -168,7 +157,7 @@ export default function Dashboard() {
         alerts.push({ vehicleNumber: van.registrationNumber, alertType: "insurance", expiryDate });
       }
     }
-    
+
     if (van.licenseExpiry) {
       const expiryDate = parseISO(van.licenseExpiry);
       const daysUntil = differenceInDays(expiryDate, today);
@@ -176,7 +165,7 @@ export default function Dashboard() {
         alerts.push({ vehicleNumber: van.registrationNumber, alertType: "license", expiryDate });
       }
     }
-    
+
     if (van.lastServiceDate) {
       const lastService = parseISO(van.lastServiceDate);
       const nextServiceDue = addDays(lastService, serviceIntervalMonths * 30);
@@ -185,9 +174,24 @@ export default function Dashboard() {
         alerts.push({ vehicleNumber: van.registrationNumber, alertType: "service", expiryDate: nextServiceDue });
       }
     }
-    
+
     return alerts;
   });
+
+  const todayCashCollected = ordersData.reduce((sum, o) => sum + Number(o.cashCollected || 0), 0);
+
+  const revenueChartData = salesWeek.map((d) => ({
+    date: format(parseISO(d.date), "EEE"),
+    revenue: parseFloat(d.revenue),
+    orders: d.orders,
+  }));
+
+  const orderStatusData = [
+    { name: "Pending", value: orders.filter((o) => o.status === "pending").length, color: "hsl(var(--chart-4))" },
+    { name: "Bagged", value: orders.filter((o) => o.status === "bagged").length, color: "hsl(var(--chart-2))" },
+    { name: "Delivered", value: orders.filter((o) => o.status === "delivered").length, color: "hsl(var(--chart-1))" },
+    { name: "Cancelled", value: orders.filter((o) => o.status === "cancelled").length, color: "hsl(var(--chart-5))" },
+  ].filter((d) => d.value > 0);
 
   if (statsLoading || ordersLoading) {
     return (
@@ -202,10 +206,7 @@ export default function Dashboard() {
           <Skeleton className="h-24" />
           <Skeleton className="h-24" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Skeleton className="lg:col-span-2 h-64" />
-          <Skeleton className="h-64" />
-        </div>
+        <Skeleton className="h-64" />
       </div>
     );
   }
@@ -228,23 +229,30 @@ export default function Dashboard() {
         <MetricCard
           title="Today's Orders"
           value={`${stats?.todaysOrdersKg || 0} kg`}
-          subtitle={`${stats?.todaysOrdersCount || 0} customers`}
+          subtitle={`${stats?.todaysOrdersCount || 0} orders`}
           icon={Package}
           trend={stats?.ordersGrowth ? { value: stats.ordersGrowth, isPositive: stats.ordersGrowth > 0 } : undefined}
         />
         <MetricCard
           title="Deliveries"
           value={stats?.deliveriesInProgress || 0}
-          subtitle="In progress"
+          subtitle={`${stats?.pendingDeliveries || 0} pending`}
           icon={Truck}
         />
         <MetricCard
           title="Active Customers"
           value={stats?.activeCustomers || 0}
           icon={Users}
-          trend={stats?.customersGrowth ? { value: stats.customersGrowth, isPositive: stats.customersGrowth > 0 } : undefined}
         />
       </div>
+
+      <DashboardCharts
+        revenueData={revenueChartData}
+        orderStatusData={orderStatusData}
+        config={config}
+        todayRevenue={stats?.todayRevenue || 0}
+        todayCashCollected={todayCashCollected}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
@@ -261,7 +269,9 @@ export default function Dashboard() {
             orders={orders}
             editable={true}
             onUpdateOrder={handleUpdateOrder}
-            onPrintInvoice={(id) => console.log("Print invoice:", id)}
+            onPrintInvoice={(id) => {
+              toast({ title: "Invoice", description: `Opening invoice for order ${id}` });
+            }}
           />
         </div>
         <div>
@@ -280,7 +290,7 @@ export default function Dashboard() {
                     vehicleNumber={alert.vehicleNumber}
                     alertType={alert.alertType}
                     expiryDate={alert.expiryDate}
-                    onAction={() => console.log(`Action for ${alert.vehicleNumber}`)}
+                    onAction={() => { window.location.href = "/vans"; }}
                   />
                 ))
               ) : (

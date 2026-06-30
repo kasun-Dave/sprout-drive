@@ -1,0 +1,18 @@
+rules_version = '2';
+
+/**
+ * SproutDrive Firestore Security Rules
+ *
+ * The Express server uses Firebase Admin SDK (bypasses these rules).
+ * These rules block direct client SDK access until Firebase Auth is wired on the client.
+ *
+ * Deploy: firebase deploy --only firestore:rules --project sproutdrive-a975e
+ * Docs:   docs/FIREBASE_SETUP.md
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sproutdrive/{orgId}/{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

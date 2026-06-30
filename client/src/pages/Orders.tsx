@@ -13,6 +13,8 @@ import { ShoppingCart, Plus, Package, DollarSign, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useBusinessConfig } from "@/hooks/useBusinessConfig";
+import { calculateOrderTotal, resolvePricePerKg, formatCurrency } from "@shared/businessConfig";
 import type { Order as DbOrder, Customer, InsertOrder } from "@shared/schema";
 
 type OrderWithCustomer = DbOrder & { customer?: Customer };
@@ -32,6 +34,7 @@ interface TableOrder {
 
 export default function Orders() {
   const { toast } = useToast();
+  const { config } = useBusinessConfig();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<TableOrder | null>(null);
@@ -129,13 +132,16 @@ export default function Orders() {
         return;
       }
       
+      const pricePerKg = resolvePricePerKg(customer.pricePerKg, config);
+      const totalAmount = calculateOrderTotal(o.quantity, pricePerKg, config.taxRate);
+
       const orderData: InsertOrder = {
         customerId: customer.id,
         orderDate: selectedDate,
         deliveryDate: selectedDate,
         quantityKg: String(o.quantity),
-        pricePerKg: customer.pricePerKg || "5.00",
-        totalAmount: String(o.quantity * Number(customer.pricePerKg || 5)),
+        pricePerKg: String(pricePerKg),
+        totalAmount: String(totalAmount.toFixed(2)),
         status: "pending",
         paymentStatus: "pending",
       };
@@ -205,7 +211,7 @@ export default function Orders() {
         />
         <MetricCard
           title="Cash Collected"
-          value={`$${totalCash.toFixed(2)}`}
+          value={formatCurrency(totalCash, config)}
           subtitle="Today's total"
           icon={DollarSign}
           variant="success"
@@ -257,23 +263,32 @@ export default function Orders() {
 
       <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
         <DialogContent className="max-w-2xl">
-          {selectedOrderForInvoice && (
-            <InvoiceView
-              invoiceNumber={`INV-${selectedOrderForInvoice.id}`}
-              date={new Date()}
-              customerName={selectedOrderForInvoice.customerName}
-              items={[
-                {
-                  product: selectedOrderForInvoice.product,
-                  quantity: selectedOrderForInvoice.deliveredQty,
-                  pricePerUnit: 5,
-                  total: selectedOrderForInvoice.deliveredQty * 5,
-                },
-              ]}
-              onPrint={() => window.print()}
-              onDownload={() => console.log("Download invoice")}
-            />
-          )}
+          {selectedOrderForInvoice && (() => {
+            const dbOrder = ordersData.find((o) => String(o.id) === selectedOrderForInvoice.id);
+            const pricePerKg = dbOrder ? Number(dbOrder.pricePerKg) : config.defaultPricePerKg;
+            const qty = selectedOrderForInvoice.deliveredQty || selectedOrderForInvoice.orderedQty;
+            const lineTotal = calculateOrderTotal(qty, pricePerKg, config.taxRate);
+            return (
+              <InvoiceView
+                invoiceNumber={`INV-${selectedOrderForInvoice.id}`}
+                date={new Date()}
+                customerName={selectedOrderForInvoice.customerName}
+                companyName={config.companyName}
+                companyPhone={config.companyPhone}
+                companyAddress={config.companyAddress}
+                items={[
+                  {
+                    product: selectedOrderForInvoice.product,
+                    quantity: qty,
+                    pricePerUnit: pricePerKg,
+                    total: lineTotal,
+                  },
+                ]}
+                onPrint={() => window.print()}
+                onDownload={() => toast({ title: "Invoice", description: "Invoice ready to download" })}
+              />
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

@@ -16,6 +16,9 @@ interface InvoiceViewProps {
   date: Date;
   customerName: string;
   customerAddress?: string;
+  companyName?: string;
+  companyPhone?: string;
+  companyAddress?: string;
   items: InvoiceItem[];
   onPrint?: () => void;
   onDownload?: () => void;
@@ -26,6 +29,9 @@ export function InvoiceView({
   date,
   customerName,
   customerAddress,
+  companyName = "SproutDrive",
+  companyPhone = "(555) 123-4567",
+  companyAddress = "123 Farm Road, Green Valley, CA 94000",
   items,
   onPrint,
   onDownload,
@@ -39,17 +45,13 @@ export function InvoiceView({
           <div className="p-2 bg-primary rounded-md">
             <Sprout className="h-6 w-6 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold">SproutDrive</h1>
+          <h1 className="text-2xl font-bold">{companyName}</h1>
         </div>
         <p className="text-sm text-muted-foreground">
           Fresh Mung Bean Sprouts & Vegetables
         </p>
-        <p className="text-sm text-muted-foreground">
-          123 Farm Road, Green Valley, CA 94000
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Phone: (555) 123-4567
-        </p>
+        <p className="text-sm text-muted-foreground">{companyAddress}</p>
+        <p className="text-sm text-muted-foreground">Phone: {companyPhone}</p>
       </CardHeader>
       <Separator />
       <CardContent className="py-6">

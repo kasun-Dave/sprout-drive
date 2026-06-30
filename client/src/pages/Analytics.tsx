@@ -12,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart3, TrendingUp, Download, Calendar, PieChart, Users } from "lucide-react";
 import { format, subDays, parseISO } from "date-fns";
+import { useBusinessConfig } from "@/hooks/useBusinessConfig";
+import { calculateDemandPredictions, calculateBeansNeeded, formatCurrency } from "@shared/businessConfig";
 import { getQueryFn } from "@/lib/queryClient";
 
 interface SalesData {
@@ -33,6 +35,7 @@ interface ProductData {
 }
 
 export default function Analytics() {
+  const { config } = useBusinessConfig();
   const today = new Date();
   const [dateFrom, setDateFrom] = useState(format(subDays(today, 30), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(today, "yyyy-MM-dd"));
@@ -81,29 +84,15 @@ export default function Analytics() {
   const avgDailyRevenue = salesData.length > 0 ? totalRevenue / salesData.length : 0;
   const avgDailyOrders = salesData.length > 0 ? totalOrders / salesData.length : 0;
 
-  const predictions = [
-    { 
-      period: "This Week", 
-      predictedDemand: Math.round(avgDailyOrders * 7 * 30), 
-      suggestedBeds: Math.round(avgDailyOrders * 7 * 30 / 30), 
-      suggestedBeans: Math.round(avgDailyOrders * 7 * 30 / 6), 
-      confidence: "high" as const 
-    },
-    { 
-      period: "Next Week", 
-      predictedDemand: Math.round(avgDailyOrders * 7 * 30 * 1.05), 
-      suggestedBeds: Math.round(avgDailyOrders * 7 * 30 * 1.05 / 30), 
-      suggestedBeans: Math.round(avgDailyOrders * 7 * 30 * 1.05 / 6), 
-      confidence: "medium" as const 
-    },
-    { 
-      period: "Week 3", 
-      predictedDemand: Math.round(avgDailyOrders * 7 * 30 * 1.1), 
-      suggestedBeds: Math.round(avgDailyOrders * 7 * 30 * 1.1 / 30), 
-      suggestedBeans: Math.round(avgDailyOrders * 7 * 30 * 1.1 / 6), 
-      confidence: "low" as const 
-    },
-  ];
+  const avgDailyQuantityKg =
+    salesData.length > 0
+      ? salesData.reduce((sum, item) => sum + parseFloat(item.revenue) / Math.max(config.defaultPricePerKg, 0.01), 0) / salesData.length
+      : 0;
+
+  const predictions = calculateDemandPredictions(avgDailyQuantityKg, config, 3);
+
+  const fourWeekDemand = avgDailyQuantityKg * 28;
+  const suggestedBeans = Math.round(calculateBeansNeeded(fourWeekDemand, config.beansToSproutsRatio));
 
   const monthlyData = salesData.reduce((acc, item) => {
     const date = parseISO(item.date);
@@ -293,7 +282,7 @@ export default function Analytics() {
                         <div className="text-right">
                           <p className="font-semibold">{product.value.toLocaleString()} kg</p>
                           <p className="text-sm text-muted-foreground">
-                            ${(product.value * 5).toLocaleString()} revenue
+                            {formatCurrency(product.value * config.defaultPricePerKg, config)} revenue
                           </p>
                         </div>
                       </div>
@@ -357,7 +346,7 @@ export default function Analytics() {
           {salesLoading ? (
             <Skeleton className="h-60" />
           ) : (
-            <DemandPrediction predictions={predictions} beansToSproutsRatio={6} />
+            <DemandPrediction predictions={predictions} beansToSproutsRatio={config.beansToSproutsRatio} />
           )}
           
           <Card>
@@ -375,10 +364,10 @@ export default function Analytics() {
                   <div className="p-4 bg-muted/50 rounded-md">
                     <h4 className="font-medium mb-2">Mung Beans</h4>
                     <p className="text-sm text-muted-foreground mb-2">
-                      Based on the next 4 weeks projected demand of ~{Math.round(avgDailyOrders * 28 * 30)} kg sprouts
+                      Based on the next 4 weeks projected demand of ~{Math.round(fourWeekDemand)} kg sprouts
                     </p>
                     <p className="text-lg font-semibold">
-                      Suggested purchase: <span className="text-primary">{Math.round(avgDailyOrders * 28 * 30 / 6)} kg</span>
+                      Suggested purchase: <span className="text-primary">{suggestedBeans} kg beans</span>
                     </p>
                   </div>
                   <div className="p-4 bg-muted/50 rounded-md">

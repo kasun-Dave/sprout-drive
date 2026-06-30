@@ -6,7 +6,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
-import { storage } from "./storage";
+import { storage } from "./storageFactory";
 
 const getOidcConfig = memoize(
   async () => {
@@ -99,6 +99,10 @@ export async function setupAuth(app: Express) {
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+
+  app.get("/api/auth/config", (_req, res) => {
+    res.json({ provider: "replit" });
+  });
 
   app.get("/api/login", (req, res, next) => {
     ensureStrategy(req.hostname);

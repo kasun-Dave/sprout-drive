@@ -1,39 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Save } from "lucide-react";
+import { Settings, Save, DollarSign, Sprout } from "lucide-react";
+import type { BusinessConfig } from "@shared/businessConfig";
+import { calculateExpectedYield } from "@shared/businessConfig";
 
 interface SettingsPanelProps {
-  initialSettings: {
-    beansToSproutsRatio: number;
-    sproutGrowthDays: number;
-    serviceIntervalMonths: number;
-    expiryWarningDays: number;
-    companyName: string;
-    companyPhone: string;
-    companyAddress: string;
-    enableNotifications: boolean;
-  };
-  onSave: (settings: any) => void;
+  initialSettings: BusinessConfig;
+  onSave: (settings: BusinessConfig) => void;
   isPending?: boolean;
 }
 
 export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPanelProps) {
   const [settings, setSettings] = useState(initialSettings);
 
-  const handleSave = () => {
-    onSave(settings);
-  };
+  useEffect(() => {
+    setSettings(initialSettings);
+  }, [initialSettings]);
+
+  const previewYield = calculateExpectedYield(1, settings.beansToSproutsRatio);
+  const previewPrice = settings.defaultPricePerKg * (1 + settings.taxRate / 100);
 
   return (
     <div className="space-y-6">
       <Card data-testid="card-conversion-settings">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Settings className="h-5 w-5 text-primary" />
+            <Sprout className="h-5 w-5 text-primary" />
             Conversion Settings
           </CardTitle>
         </CardHeader>
@@ -50,16 +46,16 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
                   step="0.1"
                   value={settings.beansToSproutsRatio}
                   onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      beansToSproutsRatio: Number(e.target.value),
-                    })
+                    setSettings({ ...settings, beansToSproutsRatio: Number(e.target.value) })
                   }
                   className="w-20"
                   data-testid="input-ratio"
                 />
                 <span className="text-sm text-muted-foreground">kg sprouts</span>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Used for planting yield, demand forecasts, and harvest planning
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="growthDays">Sprout Growth Days</Label>
@@ -70,10 +66,7 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
                   min="1"
                   value={settings.sproutGrowthDays}
                   onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      sproutGrowthDays: Number(e.target.value),
-                    })
+                    setSettings({ ...settings, sproutGrowthDays: Number(e.target.value) })
                   }
                   className="w-20"
                   data-testid="input-growth-days"
@@ -81,6 +74,78 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
                 <span className="text-sm text-muted-foreground">days</span>
               </div>
             </div>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-sm">
+            Preview: 10 kg beans → {calculateExpectedYield(10, settings.beansToSproutsRatio)} kg sprouts
+            in {settings.sproutGrowthDays} days (1 kg → {previewYield} kg)
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-cash-settings">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <DollarSign className="h-5 w-5 text-primary" />
+            Cash & Pricing Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="defaultPrice">Default Price (per kg)</Label>
+              <Input
+                id="defaultPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                value={settings.defaultPricePerKg}
+                onChange={(e) =>
+                  setSettings({ ...settings, defaultPricePerKg: Number(e.target.value) })
+                }
+                data-testid="input-default-price"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="taxRate">Tax Rate (%)</Label>
+              <Input
+                id="taxRate"
+                type="number"
+                min="0"
+                step="0.1"
+                value={settings.taxRate}
+                onChange={(e) =>
+                  setSettings({ ...settings, taxRate: Number(e.target.value) })
+                }
+                data-testid="input-tax-rate"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="currency">Currency Code</Label>
+              <Input
+                id="currency"
+                value={settings.currency}
+                onChange={(e) =>
+                  setSettings({ ...settings, currency: e.target.value.toUpperCase() })
+                }
+                data-testid="input-currency"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="currencySymbol">Currency Symbol</Label>
+              <Input
+                id="currencySymbol"
+                value={settings.currencySymbol}
+                onChange={(e) =>
+                  setSettings({ ...settings, currencySymbol: e.target.value })
+                }
+                data-testid="input-currency-symbol"
+              />
+            </div>
+          </div>
+          <div className="rounded-md bg-muted/50 p-3 text-sm">
+            New orders without a customer price use {settings.currencySymbol}
+            {settings.defaultPricePerKg.toFixed(2)}/kg
+            {settings.taxRate > 0 && ` (+ ${settings.taxRate}% tax = ${settings.currencySymbol}${previewPrice.toFixed(2)}/kg)`}
           </div>
         </CardContent>
       </Card>
@@ -101,10 +166,7 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
                   min="1"
                   value={settings.serviceIntervalMonths}
                   onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      serviceIntervalMonths: Number(e.target.value),
-                    })
+                    setSettings({ ...settings, serviceIntervalMonths: Number(e.target.value) })
                   }
                   className="w-20"
                   data-testid="input-service-interval"
@@ -121,10 +183,7 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
                   min="1"
                   value={settings.expiryWarningDays}
                   onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      expiryWarningDays: Number(e.target.value),
-                    })
+                    setSettings({ ...settings, expiryWarningDays: Number(e.target.value) })
                   }
                   className="w-20"
                   data-testid="input-expiry-warning"
@@ -146,9 +205,7 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
             <Input
               id="companyName"
               value={settings.companyName}
-              onChange={(e) =>
-                setSettings({ ...settings, companyName: e.target.value })
-              }
+              onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
               data-testid="input-company-name"
             />
           </div>
@@ -158,9 +215,7 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
               <Input
                 id="companyPhone"
                 value={settings.companyPhone}
-                onChange={(e) =>
-                  setSettings({ ...settings, companyPhone: e.target.value })
-                }
+                onChange={(e) => setSettings({ ...settings, companyPhone: e.target.value })}
                 data-testid="input-company-phone"
               />
             </div>
@@ -169,9 +224,7 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
               <Input
                 id="companyAddress"
                 value={settings.companyAddress}
-                onChange={(e) =>
-                  setSettings({ ...settings, companyAddress: e.target.value })
-                }
+                onChange={(e) => setSettings({ ...settings, companyAddress: e.target.value })}
                 data-testid="input-company-address"
               />
             </div>
@@ -201,7 +254,7 @@ export function SettingsPanel({ initialSettings, onSave, isPending }: SettingsPa
           </div>
         </CardContent>
         <CardFooter className="border-t pt-4">
-          <Button onClick={handleSave} disabled={isPending} data-testid="button-save-settings">
+          <Button onClick={() => onSave(settings)} disabled={isPending} data-testid="button-save-settings">
             <Save className="h-4 w-4 mr-2" />
             {isPending ? "Saving..." : "Save Settings"}
           </Button>

@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { getDb } from "./db";
 import {
   suppliers,
   purchases,
@@ -15,17 +15,17 @@ async function seed() {
   console.log("Seeding database...");
 
   // Clear existing data (optional - comment out if you want to keep existing data)
-  await db.delete(orders);
-  await db.delete(purchases);
-  await db.delete(plantingBatches);
-  await db.delete(customers);
-  await db.delete(suppliers);
-  await db.delete(vans);
-  await db.delete(stockItems);
-  await db.delete(settings);
+  await getDb().delete(orders);
+  await getDb().delete(purchases);
+  await getDb().delete(plantingBatches);
+  await getDb().delete(customers);
+  await getDb().delete(suppliers);
+  await getDb().delete(vans);
+  await getDb().delete(stockItems);
+  await getDb().delete(settings);
 
   // Seed suppliers
-  const [supplier1, supplier2, supplier3] = await db
+  const [supplier1, supplier2, supplier3] = await getDb()
     .insert(suppliers)
     .values([
       {
@@ -59,7 +59,7 @@ async function seed() {
 
   // Seed purchases
   const today = new Date();
-  await db.insert(purchases).values([
+  await getDb().insert(purchases).values([
     {
       supplierId: supplier1.id,
       purchaseDate: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -88,7 +88,7 @@ async function seed() {
   console.log("Purchases seeded");
 
   // Seed planting batches
-  await db.insert(plantingBatches).values([
+  await getDb().insert(plantingBatches).values([
     {
       batchCode: `BATCH-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}-001`,
       plantedDate: new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -136,7 +136,7 @@ async function seed() {
   console.log("Planting batches seeded");
 
   // Seed customers
-  const [customer1, customer2, customer3, customer4, customer5] = await db
+  const [customer1, customer2, customer3, customer4, customer5] = await getDb()
     .insert(customers)
     .values([
       {
@@ -203,7 +203,7 @@ async function seed() {
 
   // Seed orders for today
   const todayStr = today.toISOString().split("T")[0];
-  await db.insert(orders).values([
+  await getDb().insert(orders).values([
     {
       customerId: customer1.id,
       orderDate: todayStr,
@@ -268,7 +268,7 @@ async function seed() {
   console.log("Orders seeded");
 
   // Seed vans
-  await db.insert(vans).values([
+  await getDb().insert(vans).values([
     {
       registrationNumber: "ABC-1234",
       make: "Toyota",
@@ -314,7 +314,7 @@ async function seed() {
   console.log("Vans seeded");
 
   // Seed stock items
-  await db.insert(stockItems).values([
+  await getDb().insert(stockItems).values([
     {
       itemType: "raw",
       name: "Mung Beans (Raw)",
@@ -347,53 +347,20 @@ async function seed() {
 
   console.log("Stock items seeded");
 
-  // Seed settings
-  await db.insert(settings).values([
-    {
-      key: "bean_to_sprout_ratio",
-      value: "9",
-      description: "Conversion ratio: 1kg beans produces this many kg of sprouts",
-    },
-    {
-      key: "growth_cycle_days",
-      value: "6",
-      description: "Number of days from planting to harvest",
-    },
-    {
-      key: "default_price_per_kg",
-      value: "5.00",
-      description: "Default selling price per kg of sprouts",
-    },
-    {
-      key: "company_name",
-      value: "SproutDrive Farm",
-      description: "Company name for invoices",
-    },
-    {
-      key: "company_phone",
-      value: "+1 800 SPROUTS",
-      description: "Company phone number",
-    },
-    {
-      key: "company_email",
-      value: "orders@sproutdrive.com",
-      description: "Company email address",
-    },
-    {
-      key: "company_address",
-      value: "123 Sprout Lane, Green Valley, CA 94000",
-      description: "Company address for invoices",
-    },
-    {
-      key: "alert_days_insurance",
-      value: "14",
-      description: "Days before insurance expiry to show alert",
-    },
-    {
-      key: "alert_days_service",
-      value: "14",
-      description: "Days before service due to show alert",
-    },
+  // Seed settings (canonical keys — see shared/businessConfig.ts)
+  await getDb().insert(settings).values([
+    { key: "beansToSproutsRatio", value: "7", description: "Kg sprouts per 1 kg beans" },
+    { key: "sproutGrowthDays", value: "6", description: "Days from planting to harvest" },
+    { key: "defaultPricePerKg", value: "3.50", description: "Default selling price per kg" },
+    { key: "currency", value: "USD", description: "ISO currency code" },
+    { key: "currencySymbol", value: "$", description: "Currency display symbol" },
+    { key: "taxRate", value: "0", description: "Tax rate percentage" },
+    { key: "companyName", value: "SproutDrive Farm", description: "Company name for invoices" },
+    { key: "companyPhone", value: "+1 800 SPROUTS", description: "Company phone number" },
+    { key: "companyAddress", value: "123 Sprout Lane, Green Valley, CA 94000", description: "Company address" },
+    { key: "serviceIntervalMonths", value: "6", description: "Vehicle service interval in months" },
+    { key: "expiryWarningDays", value: "30", description: "Days before expiry alerts" },
+    { key: "enableNotifications", value: "true", description: "Enable notifications" },
   ]);
 
   console.log("Settings seeded");

@@ -9,7 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sprout } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { PlantingBatch, InsertPlantingBatch, Setting } from "@shared/schema";
+import { useBusinessConfig } from "@/hooks/useBusinessConfig";
+import { calculateExpectedYield, calculateDemandPredictions } from "@shared/businessConfig";
+import type { PlantingBatch, InsertPlantingBatch, Order as DbOrder, Customer } from "@shared/schema";
 import { addDays, format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,12 +39,12 @@ export default function Planting() {
     queryKey: ["/api/planting-batches"],
   });
 
-  const { data: settings = [] } = useQuery<Setting[]>({
-    queryKey: ["/api/settings"],
-  });
+  const { config } = useBusinessConfig();
+  const { beansToSproutsRatio, sproutGrowthDays } = config;
 
-  const beansToSproutsRatio = Number(settings.find(s => s.key === "beansToSproutsRatio")?.value) || 6;
-  const sproutGrowthDays = Number(settings.find(s => s.key === "sproutGrowthDays")?.value) || 6;
+  const { data: recentOrders = [] } = useQuery<Array<DbOrder & { customer?: Customer }>>({
+    queryKey: ["/api/orders"],
+  });
 
   const createBatchMutation = useMutation({
     mutationFn: async (data: InsertPlantingBatch) => {
@@ -75,7 +77,7 @@ export default function Planting() {
   });
 
   const handleCreateBatch = (data: { plantingDate: string; beds: number; beansUsed: number }) => {
-    const expectedSprouts = data.beansUsed * beansToSproutsRatio;
+    const expectedSprouts = calculateExpectedYield(data.beansUsed, beansToSproutsRatio);
     const expectedHarvestDate = format(addDays(parseISO(data.plantingDate), sproutGrowthDays), "yyyy-MM-dd");
     const batchCode = `BATCH-${format(new Date(), "yyyyMMdd")}-${String(batches.length + 1).padStart(3, "0")}`;
     
@@ -117,14 +119,19 @@ export default function Planting() {
     );
     const kgAvailable = batchesForDay.reduce((sum, b) => sum + Number(b.expectedYieldKg), 0);
     const bedsReady = batchesForDay.length;
-    return { date, bedsReady, kgAvailable, orderedKg: 0 };
+    const orderedKg = recentOrders
+      .filter((o) => o.deliveryDate === dateStr)
+      .reduce((sum, o) => sum + Number(o.quantityKg), 0);
+    return { date, bedsReady, kgAvailable, orderedKg };
   });
 
-  const predictions = [
-    { period: "This Week", predictedDemand: 420, suggestedBeds: 14, suggestedBeans: 70, confidence: "high" as const },
-    { period: "Next Week", predictedDemand: 450, suggestedBeds: 15, suggestedBeans: 75, confidence: "medium" as const },
-    { period: "Week 3", predictedDemand: 480, suggestedBeds: 16, suggestedBeans: 80, confidence: "low" as const },
-  ];
+  const avgDailyOrdersKg =
+    recentOrders.length > 0
+      ? recentOrders.reduce((sum, o) => sum + Number(o.quantityKg), 0) /
+        Math.max(1, new Set(recentOrders.map((o) => o.deliveryDate)).size)
+      : 0;
+
+  const predictions = calculateDemandPredictions(avgDailyOrdersKg, config, 3);
 
   const batchColumns = [
     { key: "batchCode", header: "Batch Code" },
@@ -173,6 +180,7 @@ export default function Planting() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <PlantingForm 
           beansToSproutsRatio={beansToSproutsRatio} 
+          sproutGrowthDays={sproutGrowthDays}
           onSubmit={handleCreateBatch}
           isPending={createBatchMutation.isPending}
         />

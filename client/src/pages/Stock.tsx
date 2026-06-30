@@ -91,7 +91,7 @@ export default function Stock() {
     
     const transactionData: InsertStockTransaction = {
       stockItemId: selectedItem.id,
-      transactionType: adjustmentType === "add" ? "in" : "out",
+      transactionType: adjustmentType === "add" ? "add" : "remove",
       quantity: String(Math.abs(quantity)),
       notes: adjustmentNotes || null,
     };

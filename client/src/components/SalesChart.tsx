@@ -81,7 +81,7 @@ export function SalesChart({ data, title = "Sales Overview" }: SalesChartProps) 
                   stroke="hsl(var(--chart-1))"
                   strokeWidth={2}
                   dot={{ fill: 'hsl(var(--chart-1))' }}
-                  name="Sales (kg)"
+                  name="Revenue"
                 />
                 <Line
                   type="monotone"
@@ -105,7 +105,7 @@ export function SalesChart({ data, title = "Sales Overview" }: SalesChartProps) 
                   }}
                 />
                 <Legend />
-                <Bar dataKey="sales" fill="hsl(var(--chart-1))" name="Sales (kg)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="sales" fill="hsl(var(--chart-1))" name="Revenue" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="orders" fill="hsl(var(--chart-2))" name="Orders" radius={[4, 4, 0, 0]} />
               </BarChart>
             )}

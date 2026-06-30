@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { storage, getStorageInfo, forceFirebaseSync } from "./storageFactory";
+import { setupAuth, isAuthenticated } from "./auth";
 import {
   insertSupplierSchema,
   insertPurchaseSchema,
@@ -551,6 +551,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put('/api/settings/:key', isAuthenticated, async (req, res) => {
+    try {
+      const { value, description } = req.body;
+      if (value === undefined) {
+        return res.status(400).json({ message: "Value is required" });
+      }
+      const setting = await storage.upsertSetting({
+        key: req.params.key,
+        value: String(value),
+        description: description ?? `${req.params.key} setting`,
+      });
+      res.json(setting);
+    } catch (error) {
+      console.error("Error updating setting:", error);
+      res.status(400).json({ message: "Failed to update setting" });
+    }
+  });
+
+  app.get('/api/business-config', isAuthenticated, async (_req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      const { parseBusinessConfig } = await import("@shared/businessConfig");
+      res.json(parseBusinessConfig(settings));
+    } catch (error) {
+      console.error("Error fetching business config:", error);
+      res.status(500).json({ message: "Failed to fetch business config" });
+    }
+  });
+
   // Dashboard/Analytics routes
   app.get('/api/dashboard/stats', isAuthenticated, async (req, res) => {
     try {
@@ -632,6 +661,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting maintenance log:", error);
       res.status(500).json({ message: "Failed to delete maintenance log" });
+    }
+  });
+
+  app.get("/api/system/storage", isAuthenticated, async (_req, res) => {
+    res.json(getStorageInfo());
+  });
+
+  // Public health check for Render / load balancers (no auth)
+  app.get("/api/health", (_req, res) => {
+    res.json({
+      ok: true,
+      service: "sproutdrive",
+      env: process.env.NODE_ENV ?? "development",
+    });
+  });
+
+  app.post("/api/system/storage/sync", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user || user.role !== "owner") {
+        return res.status(403).json({ message: "Only owners can trigger cloud sync" });
+      }
+      const result = await forceFirebaseSync();
+      if (!result.ok) {
+        return res.status(500).json({ message: result.error ?? "Sync failed" });
+      }
+      res.json({ success: true, ...getStorageInfo() });
+    } catch (error) {
+      console.error("Error syncing to Firebase:", error);
+      res.status(500).json({ message: "Failed to sync to Firebase" });
     }
   });
 

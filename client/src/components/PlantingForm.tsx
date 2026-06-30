@@ -8,6 +8,7 @@ import { format, addDays } from "date-fns";
 
 interface PlantingFormProps {
   beansToSproutsRatio: number;
+  sproutGrowthDays: number;
   onSubmit: (data: {
     plantingDate: string;
     beds: number;
@@ -16,13 +17,13 @@ interface PlantingFormProps {
   isPending?: boolean;
 }
 
-export function PlantingForm({ beansToSproutsRatio, onSubmit, isPending }: PlantingFormProps) {
+export function PlantingForm({ beansToSproutsRatio, sproutGrowthDays, onSubmit, isPending }: PlantingFormProps) {
   const [plantingDate, setPlantingDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [numberOfBeds, setNumberOfBeds] = useState(10);
   const [beansUsed, setBeansUsed] = useState(50);
 
   const expectedSprouts = beansUsed * beansToSproutsRatio;
-  const readyDate = addDays(new Date(plantingDate), 6);
+  const readyDate = addDays(new Date(plantingDate), sproutGrowthDays);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
