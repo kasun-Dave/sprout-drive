@@ -1,0 +1,16 @@
+# Belmo / Coolify / Railway (legacy Nixpacks)
+# Install runs once; build must NOT re-run npm ci (EBUSY on node_modules/.cache).
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"
+
+[variables]
+NPM_CONFIG_CACHE = "/tmp/npm-cache"
+VITE_CACHE_DIR = "/tmp/vite-cache"
+XDG_CACHE_HOME = "/tmp/xdg-cache"

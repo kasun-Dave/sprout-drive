@@ -47,7 +47,7 @@ git push -u origin main
 
 | Setting | Value |
 |---------|--------|
-| **Build Command** | `npm ci && npm run build` |
+| **Build Command** | `npm run build` *(do not add `npm ci` — install runs separately)* |
 | **Start Command** | `npm start` |
 | **Plan** | Free |
 | **Region** | Singapore (closest to South Asia) |
@@ -90,7 +90,7 @@ Render pings `/api/auth/config` — should return `{"provider":"local"}`.
 
 1. [railway.app](https://railway.app) → New Project → Deploy from GitHub  
 2. Same env vars as Render  
-3. Build: `npm ci && npm run build`  
+3. Build: `npm run build`  
 4. Start: `npm start`
 
 ---
@@ -105,6 +105,26 @@ cloudflared tunnel --url http://localhost:5000
 ```
 
 Or use [ngrok](https://ngrok.com): `ngrok http 5000`
+
+---
+
+## Option D — Belmo (free tier)
+
+Belmo auto-detects Node.js and runs **install** and **build** as separate steps. Do **not** put `npm ci` in the build command — it causes `EBUSY: rmdir node_modules/.cache`.
+
+### Belmo settings (required)
+
+1. **Build** tab → **Build Command** must be exactly:
+   ```
+   npm run build
+   ```
+   *(Not `npm ci && npm run build`)*
+
+2. **Or** switch to **Dockerfile** mode in Settings (uses the repo `Dockerfile` instead of auto-build).
+
+3. **Environment** — same vars as Render (see Step 3 above).
+
+4. Redeploy after saving settings.
 
 ---
 
@@ -125,7 +145,7 @@ Or use [ngrok](https://ngrok.com): `ngrok http 5000`
 | Issue | Fix |
 |-------|-----|
 | Plain **"Not Found"** on black page | You likely created a **Static Site** — delete it and create a **Web Service** instead. Redeploy with `npm run build` + `npm start` |
-| Build fails | Check Render logs; run `npm run build` locally |
+| Build fails with **EBUSY** / `node_modules/.cache` | Remove `npm ci` from build command; use `npm run build` only, or switch to Dockerfile deploy |
 | Login doesn’t stick | Ensure `SESSION_SECRET` is set; site must use HTTPS (Render provides this) |
 | Empty data | Set `FIREBASE_SERVICE_ACCOUNT_JSON`; check [Firestore console](https://console.firebase.google.com/project/sproutdrive-a975e/firestore) |
 | 502 on wake | Wait 60s for free tier cold start |
