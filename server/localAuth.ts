@@ -42,6 +42,12 @@ export async function setupAuth(app: Express) {
             firstName,
             lastName: "User",
           });
+
+          const bootstrapEmail = process.env.BOOTSTRAP_OWNER_EMAIL?.trim().toLowerCase();
+          if (bootstrapEmail && email.toLowerCase() === bootstrapEmail) {
+            await storage.updateUserRole(userId, "owner");
+          }
+
           done(null, {
             claims: { sub: userId, email, first_name: firstName, last_name: "User" },
             expires_at: Math.floor(Date.now() / 1000) + 86400 * 7,

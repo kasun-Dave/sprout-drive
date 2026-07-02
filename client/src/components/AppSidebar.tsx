@@ -66,7 +66,7 @@ export function AppSidebar({ userRole, userName, onLogout }: AppSidebarProps) {
           <div>
             <h1 className="font-bold text-lg">SproutDrive</h1>
             <p className="text-xs text-muted-foreground capitalize">
-              {userRole} Portal
+              {userRole === "owner" ? "Admin Portal" : "Staff Portal"}
             </p>
           </div>
         </div>
@@ -103,7 +103,9 @@ export function AppSidebar({ userRole, userName, onLogout }: AppSidebarProps) {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{userName}</p>
-            <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
+            <p className="text-xs text-muted-foreground">
+              {userRole === "owner" ? "Admin" : "Staff"}
+            </p>
           </div>
           <Button
             variant="ghost"

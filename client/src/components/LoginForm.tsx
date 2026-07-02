@@ -86,7 +86,7 @@ export function LoginForm({ onLogin, isLoading = false, error }: LoginFormProps)
               )}
             </Button>
             <p className="text-sm text-muted-foreground text-center">
-              Demo: Use any email and password
+              Demo: any email + password works. First sign-in becomes Admin if the database is empty.
             </p>
           </CardFooter>
         </form>

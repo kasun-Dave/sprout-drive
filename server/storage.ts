@@ -40,6 +40,7 @@ import { computeGrowthPercent, type DashboardStats } from "@shared/businessConfi
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUsers(): Promise<User[]>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserRole(id: string, role: string): Promise<User | undefined>;
   
@@ -135,6 +136,10 @@ export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await getDb().select().from(users).where(eq(users.id, id));
     return user;
+  }
+
+  async getUsers(): Promise<User[]> {
+    return await getDb().select().from(users).orderBy(desc(users.createdAt));
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {

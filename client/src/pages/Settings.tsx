@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { StorageInfoCard } from "@/components/StorageInfoCard";
+import { UserManagementPanel } from "@/components/UserManagementPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -75,6 +76,8 @@ export default function Settings() {
       </div>
 
       <StorageInfoCard />
+
+      <UserManagementPanel />
 
       <SettingsPanel
         initialSettings={initialSettings}
